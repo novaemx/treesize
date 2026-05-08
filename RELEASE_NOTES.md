@@ -1,9 +1,10 @@
-# Release 0.0.1
+# Release 0.1.0
 
 **Date:** 2026-05-08
 
 ## What's New
 
-- Merge feature 'macos-go-treesize-bootstrap' into develop
-- Bootstrap native macOS TreeSize release flow
+- Merge feature 'bump-version-0.1.0' into develop
+- Squash(feature): pull-formula-target
+- Squash(feature): ci-release-workflow
 
