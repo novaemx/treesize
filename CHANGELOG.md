@@ -16,6 +16,21 @@ This project follows Semantic Versioning and uses a Keep a Changelog style.
 
 - Placeholder.
 
+## [0.1.13] - 2026-05-08
+
+### TLDR
+
+- Fixed the remaining macOS CI build failure by removing readonly `NSView.tag` assignments from custom table cells.
+- Darwin release pipeline should now compile the bridge cleanly in GitHub Actions.
+
+### Detailed
+
+#### Fixed
+
+- Replaced `NSView.tag` usage in custom AppKit cell subviews with identifier-based lookup helpers.
+- Eliminated the readonly-property assignments that still failed under the macOS CI compiler.
+- Kept the custom Name and percentage bar rendering without relying on unsupported view tagging patterns.
+
 ## [0.1.12] - 2026-05-08
 
 ### TLDR
@@ -103,7 +118,8 @@ This project follows Semantic Versioning and uses a Keep a Changelog style.
 
 - Release rerun behavior now updates existing release notes and re-uploads assets safely.
 
-[Unreleased]: https://github.com/novaemx/treesize/compare/v0.1.12...HEAD
+[Unreleased]: https://github.com/novaemx/treesize/compare/v0.1.13...HEAD
+[0.1.13]: https://github.com/novaemx/treesize/releases/tag/v0.1.13
 [0.1.12]: https://github.com/novaemx/treesize/releases/tag/v0.1.12
 [0.1.11]: https://github.com/novaemx/treesize/releases/tag/v0.1.11
 [0.1.10]: https://github.com/novaemx/treesize/releases/tag/v0.1.10
