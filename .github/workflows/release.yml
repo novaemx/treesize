@@ -18,12 +18,12 @@ jobs:
 
     steps:
       - name: Checkout treesize
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: false
@@ -71,29 +71,32 @@ jobs:
           echo "tarball_path=dist/${TARBALL}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release and upload tarball
-        uses: softprops/action-gh-release@v2.3.2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: "TreeSize ${{ github.ref_name }}"
-          body: |
-            ## TreeSize ${{ github.ref_name }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > release-notes.md <<EOF
+          ## TreeSize ${GITHUB_REF_NAME}
 
-            Native macOS disk usage analyzer.
+          Native macOS disk usage analyzer.
 
-            ### Install via Homebrew
-            ```bash
-            brew install novaemx/tap/treesize
-            ```
+          ### Install via Homebrew
+          ```bash
+          brew install novaemx/tap/treesize
+          ```
 
-            ### Direct download
-            Universal macOS binary (Apple Silicon + Intel): `${{ steps.package.outputs.tarball }}`
+          ### Direct download
+          Universal macOS binary (Apple Silicon + Intel): `${{ steps.package.outputs.tarball }}`
 
-            **SHA256:** `${{ steps.package.outputs.sha256 }}`
-          files: ${{ steps.package.outputs.tarball_path }}
+          **SHA256:** `${{ steps.package.outputs.sha256 }}`
+          EOF
+          gh release create "${GITHUB_REF_NAME}" "${{ steps.package.outputs.tarball_path }}" \
+            --title "TreeSize ${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md \
+            --verify-tag
 
       - name: Checkout homebrew-tap
         if: env.TAP_TOKEN != ''
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v5
         with:
           repository: novaemx/homebrew-tap
           token: ${{ secrets.TAP_TOKEN }}
