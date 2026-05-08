@@ -73,6 +73,9 @@ jobs:
       - name: Create GitHub Release and upload tarball
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TARBALL: ${{ steps.package.outputs.tarball }}
+          RELEASE_TARBALL_PATH: ${{ steps.package.outputs.tarball_path }}
+          RELEASE_SHA256: ${{ steps.package.outputs.sha256 }}
         run: |
           cat > release-notes.md <<EOF
           ## TreeSize ${GITHUB_REF_NAME}
@@ -80,19 +83,22 @@ jobs:
           Native macOS disk usage analyzer.
 
           ### Install via Homebrew
-          ```bash
-          brew install novaemx/tap/treesize
-          ```
+
+              brew install novaemx/tap/treesize
 
           ### Direct download
-          Universal macOS binary (Apple Silicon + Intel): `${{ steps.package.outputs.tarball }}`
+          Universal macOS binary (Apple Silicon + Intel): ${RELEASE_TARBALL}
 
-          **SHA256:** `${{ steps.package.outputs.sha256 }}`
+          **SHA256:** ${RELEASE_SHA256}
           EOF
-          gh release create "${GITHUB_REF_NAME}" "${{ steps.package.outputs.tarball_path }}" \
-            --title "TreeSize ${GITHUB_REF_NAME}" \
-            --notes-file release-notes.md \
-            --verify-tag
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${RELEASE_TARBALL_PATH}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" "${RELEASE_TARBALL_PATH}" \
+              --title "TreeSize ${GITHUB_REF_NAME}" \
+              --notes-file release-notes.md \
+              --verify-tag
+          fi
 
       - name: Checkout homebrew-tap
         if: env.TAP_TOKEN != ''
