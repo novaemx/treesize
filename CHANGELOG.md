@@ -16,6 +16,21 @@ This project follows Semantic Versioning and uses a Keep a Changelog style.
 
 - Placeholder.
 
+## [0.1.12] - 2026-05-08
+
+### TLDR
+
+- Fixed the macOS build failure caused by custom NSTableCellView wiring and gradient-layer rendering.
+- Release now compiles again on GitHub Actions for Darwin.
+
+### Detailed
+
+#### Fixed
+
+- Replaced readonly NSTableCellView property assignments with tag-based view lookup in custom cells.
+- Added QuartzCore import and valid gradient layer setup for the percentage bar column.
+- Corrected custom cell rendering so the AppKit bridge builds cleanly under the macOS CI toolchain.
+
 ## [0.1.11] - 2026-05-08
 
 ### TLDR
@@ -88,7 +103,8 @@ This project follows Semantic Versioning and uses a Keep a Changelog style.
 
 - Release rerun behavior now updates existing release notes and re-uploads assets safely.
 
-[Unreleased]: https://github.com/novaemx/treesize/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/novaemx/treesize/compare/v0.1.12...HEAD
+[0.1.12]: https://github.com/novaemx/treesize/releases/tag/v0.1.12
 [0.1.11]: https://github.com/novaemx/treesize/releases/tag/v0.1.11
 [0.1.10]: https://github.com/novaemx/treesize/releases/tag/v0.1.10
 [0.1.9]: https://github.com/novaemx/treesize/releases/tag/v0.1.9
