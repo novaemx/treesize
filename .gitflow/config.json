@@ -1,0 +1,7 @@
+{
+  "ai_integration": {
+    "enabled": true,
+    "version": "0.6.5"
+  },
+  "integration_mode": "local-merge"
+}
