@@ -8,7 +8,7 @@ UNIVERSAL_BIN := $(DIST_DIR)/$(APP_NAME)-darwin-universal
 FORMULA_PATH := ../homebrew-tap/Formula/treesize.rb
 FORMULA_URL := https://github.com/novaemx/treesize-mac/releases/download/$(RELEASE_TAG)/$(RELEASE_TARBALL)
 
-.PHONY: test build-windows-amd64 build-windows-arm64 build-macos-universal package-macos-universal sha256 update-homebrew-formula release-macos-precompiled release-tag release-info clean
+.PHONY: test build-windows-amd64 build-windows-arm64 build-macos-universal package-macos-universal sha256 update-homebrew-formula release-macos-precompiled release-tag pull-formula release-info clean
 
 test:
 	go test ./...
@@ -63,6 +63,21 @@ release-tag: test
 	git push origin $(RELEASE_TAG)
 	@echo "Tag $(RELEASE_TAG) pushed. GitHub Actions will build the universal macOS binary and publish the Homebrew formula automatically."
 	@echo "Follow progress at: https://github.com/novaemx/treesize/actions"
+	@echo ""
+	@echo "Once CI finishes, run:  make pull-formula"
+	@echo "to sync treesize.rb into ../homebrew-tap/Formula/ locally."
+
+pull-formula:
+	@if [ ! -d ../homebrew-tap ]; then \
+		echo "homebrew-tap not found at ../homebrew-tap. Cloning..."; \
+		git clone https://github.com/novaemx/homebrew-tap ../homebrew-tap; \
+	else \
+		echo "Pulling latest formula from novaemx/homebrew-tap..."; \
+		git -C ../homebrew-tap pull origin HEAD; \
+	fi
+	@echo ""
+	@echo "Formula updated at: $(FORMULA_PATH)"
+	@cat $(FORMULA_PATH)
 
 # On macOS: build locally + update formula + show upload instructions.
 # On Windows: use 'make release-tag' instead; CI handles the macOS build.
