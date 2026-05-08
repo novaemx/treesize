@@ -1,6 +1,10 @@
-# Release 0.1.7
+# Release 0.1.8
 
 **Date:** 2026-05-08
+
+## What's New
+
+- Squash(feature): gui-select-disk-on-demand
 
 ## Bug Fixes
 
