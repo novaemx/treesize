@@ -6,12 +6,14 @@ Proyecto base para construir una app **nativa macOS universal** en Go, inspirada
 - Uso de APIs nativas (AppKit + Metal/MetalKit via cgo)
 - Binarios de prueba para Windows (solo validacion interna, no Homebrew)
 
-## Estado inicial
+## Estado actual
 
 Este bootstrap deja listo:
 - Entry point en Go para app GUI
-- Bridge nativo inicial de AppKit + Metal (`internal/app/app_darwin.go`)
-- Motor de escaneo jerarquico (`internal/core/scanner`)
+- Ventana nativa AppKit con `NSOutlineView` jerarquico y columnas:
+	- Name, Size, Files, Folders, % of Parent, Last Modified
+- Bridge Objective-C con panel Metal/MetalKit integrado
+- Motor de escaneo jerarquico con agregados de tamano, conteo y fecha
 - Makefile con targets de build y test
 
 ## Requisitos
@@ -36,21 +38,27 @@ make build-windows-arm64
 make build-macos-universal
 ```
 
-Los artefactos salen en `dist/`.
+Los artefactos salen en `dist/` y el nombre final del binario es `treesize`.
 
-## Siguiente fase (GUI TreeSize real)
+## Ejecucion
 
-1. Reemplazar contenido de ventana por `NSOutlineView` para arbol jerarquico.
-2. Integrar datasource en Objective-C bridge para cargar nodos desde Go.
-3. Agregar panel de detalle con conteo de archivos, ultima modificacion y porcentaje.
-4. Usar Metal para capas de render auxiliares (heatmap/barras de uso), sin degradar accesibilidad.
-5. Implementar cancelacion de escaneo y refresh incremental.
+En macOS se escanea por defecto el home del usuario. Puedes forzar ruta:
+
+```bash
+TREESIZE_ROOT=/Volumes/Data ./dist/treesize-darwin-universal
+```
+
+Tambien se puede consultar version sin abrir GUI:
+
+```bash
+./dist/treesize-darwin-universal --version
+```
 
 ## Publicacion Homebrew
 
 La formula se prepara en el tap vecino:
-- `../homebrew-tap/Formula/treesize-mac.rb`
+- `../homebrew-tap/Formula/treesize.rb`
 
 Importante:
-- Solo debe apuntar al artefacto macOS universal.
+- Solo debe apuntar al artefacto precompilado macOS universal.
 - Los `.exe` de Windows son para pruebas y **no** deben publicarse en Homebrew.

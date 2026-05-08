@@ -19,13 +19,15 @@ func ScanTree(root string) (*model.Node, error) {
 
 func buildNode(path string, info os.FileInfo) (*model.Node, error) {
 	node := &model.Node{
-		Name:  info.Name(),
-		Path:  path,
-		Size:  info.Size(),
-		IsDir: info.IsDir(),
+		Name:        info.Name(),
+		Path:        path,
+		Size:        info.Size(),
+		IsDir:       info.IsDir(),
+		ModTimeUnix: info.ModTime().Unix(),
 	}
 
 	if !info.IsDir() {
+		node.FileCount = 1
 		return node, nil
 	}
 
@@ -52,6 +54,11 @@ func buildNode(path string, info os.FileInfo) (*model.Node, error) {
 		}
 
 		node.Size += child.Size
+		node.FileCount += child.FileCount
+		node.FolderCount += child.FolderCount
+		if child.IsDir {
+			node.FolderCount++
+		}
 		node.Children = append(node.Children, child)
 	}
 
