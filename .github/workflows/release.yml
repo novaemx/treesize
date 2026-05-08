@@ -14,6 +14,7 @@ jobs:
     runs-on: macos-latest
     env:
       TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout treesize
@@ -37,18 +38,23 @@ jobs:
       - name: Build universal macOS binary
         run: |
           mkdir -p dist
+          SDK=$(xcrun --sdk macosx --show-sdk-path)
+          echo "Runner arch: $(uname -m), SDK: $SDK"
           GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 \
-            CC="clang -arch x86_64" \
+            CGO_CFLAGS="-arch x86_64 -isysroot $SDK" \
+            CGO_LDFLAGS="-arch x86_64 -isysroot $SDK" \
             go build -trimpath \
             -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o dist/treesize-darwin-amd64 ./cmd/treesize-mac
           GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 \
-            CC="clang -arch arm64" \
+            CGO_CFLAGS="-arch arm64 -isysroot $SDK" \
+            CGO_LDFLAGS="-arch arm64 -isysroot $SDK" \
             go build -trimpath \
             -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o dist/treesize-darwin-arm64 ./cmd/treesize-mac
           lipo -create -output dist/treesize-darwin-universal \
             dist/treesize-darwin-amd64 dist/treesize-darwin-arm64
+          lipo -info dist/treesize-darwin-universal
 
       - name: Verify --version flag
         run: dist/treesize-darwin-universal --version
