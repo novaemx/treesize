@@ -16,6 +16,20 @@ This project follows Semantic Versioning and uses a Keep a Changelog style.
 
 - Placeholder.
 
+## [0.1.14] - 2026-05-08
+
+### TLDR
+
+- Fixed Darwin linker failure by linking QuartzCore in cgo for the custom gradient UI.
+- Release pipeline should now build universal macOS binaries successfully.
+
+### Detailed
+
+#### Fixed
+
+- Added `-framework QuartzCore` to darwin cgo linker flags in the App bridge package.
+- Resolved `Undefined symbols for architecture x86_64: _OBJC_CLASS_$_CAGradientLayer` during universal build.
+
 ## [0.1.13] - 2026-05-08
 
 ### TLDR
@@ -118,7 +132,8 @@ This project follows Semantic Versioning and uses a Keep a Changelog style.
 
 - Release rerun behavior now updates existing release notes and re-uploads assets safely.
 
-[Unreleased]: https://github.com/novaemx/treesize/compare/v0.1.13...HEAD
+[Unreleased]: https://github.com/novaemx/treesize/compare/v0.1.14...HEAD
+[0.1.14]: https://github.com/novaemx/treesize/releases/tag/v0.1.14
 [0.1.13]: https://github.com/novaemx/treesize/releases/tag/v0.1.13
 [0.1.12]: https://github.com/novaemx/treesize/releases/tag/v0.1.12
 [0.1.11]: https://github.com/novaemx/treesize/releases/tag/v0.1.11
