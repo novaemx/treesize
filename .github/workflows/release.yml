@@ -79,6 +79,7 @@ jobs:
           files: ${{ steps.package.outputs.tarball_path }}
 
       - name: Checkout homebrew-tap
+        if: secrets.TAP_TOKEN != ''
         uses: actions/checkout@v4
         with:
           repository: novaemx/homebrew-tap
@@ -86,6 +87,7 @@ jobs:
           path: homebrew-tap
 
       - name: Update Homebrew formula
+        if: secrets.TAP_TOKEN != ''
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
           SHA=${{ steps.package.outputs.sha256 }}
@@ -99,6 +101,7 @@ jobs:
           ' "$FORMULA" > "${FORMULA}.tmp" && mv "${FORMULA}.tmp" "$FORMULA"
 
       - name: Commit and push formula update
+        if: secrets.TAP_TOKEN != ''
         run: |
           cd homebrew-tap
           git config user.name  "github-actions[bot]"
