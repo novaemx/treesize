@@ -56,16 +56,25 @@ release-info:
 	@echo "Formula URL: $(FORMULA_URL)"
 
 release-tag: test
-	@if git rev-parse $(RELEASE_TAG) >/dev/null 2>&1; then \
-		echo "Tag $(RELEASE_TAG) already exists locally. Delete it first with: git tag -d $(RELEASE_TAG)"; exit 1; \
-	fi
-	git tag -a $(RELEASE_TAG) -m "Release $(VERSION)"
-	git push origin $(RELEASE_TAG)
-	@echo "Tag $(RELEASE_TAG) pushed. GitHub Actions will build the universal macOS binary and publish the Homebrew formula automatically."
-	@echo "Follow progress at: https://github.com/novaemx/treesize/actions"
-	@echo ""
-	@echo "Once CI finishes, run:  make pull-formula"
-	@echo "to sync treesize.rb into ../homebrew-tap/Formula/ locally."
+	@LOCAL=$$(git rev-parse $(RELEASE_TAG) 2>/dev/null); \
+	REMOTE=$$(git ls-remote --tags origin refs/tags/$(RELEASE_TAG) 2>/dev/null | awk '{print $$1}'); \
+	if [ -n "$$LOCAL" ] && [ -n "$$REMOTE" ]; then \
+		echo "Tag $(RELEASE_TAG) already exists locally and on remote — release already published."; \
+		echo "Follow CI at: https://github.com/novaemx/treesize/actions"; \
+		exit 0; \
+	elif [ -n "$$LOCAL" ] && [ -z "$$REMOTE" ]; then \
+		echo "Tag $(RELEASE_TAG) exists locally but not on remote — pushing..."; \
+		git push origin $(RELEASE_TAG); \
+	else \
+		echo "Creating and pushing tag $(RELEASE_TAG)..."; \
+		git tag -a $(RELEASE_TAG) -m "Release $(VERSION)"; \
+		git push origin $(RELEASE_TAG); \
+	fi; \
+	echo ""; \
+	echo "Tag $(RELEASE_TAG) pushed. GitHub Actions will build the universal macOS binary and publish the Homebrew formula automatically."; \
+	echo "Follow progress at: https://github.com/novaemx/treesize/actions"; \
+	echo ""; \
+	echo "Once CI finishes, run:  make pull-formula"
 
 pull-formula:
 	@if [ ! -d ../homebrew-tap ]; then \
