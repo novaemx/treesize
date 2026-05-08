@@ -75,7 +75,6 @@ func buildNode(path string, info os.FileInfo, state *scanState) (*model.Node, er
 	if !info.IsDir() {
 		state.visitedCount++
 		node.FileCount = 1
-		state.emit(path)
 		return node, nil
 	}
 
@@ -127,7 +126,10 @@ func buildNode(path string, info os.FileInfo, state *scanState) (*model.Node, er
 	sort.Slice(node.Children, func(i, j int) bool {
 		return node.Children[i].Size > node.Children[j].Size
 	})
-	state.emit(path)
+	// Emit progress after directory is fully processed
+	if path == node.Path {
+		state.emit(path)
+	}
 
 	return node, nil
 }

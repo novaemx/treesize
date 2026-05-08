@@ -16,6 +16,33 @@ This project follows Semantic Versioning and uses a Keep a Changelog style.
 
 - Placeholder.
 
+## [0.1.16] - 2026-05-08
+
+### TLDR
+
+- Added confirmation dialog when stopping scans to prevent accidental cancellation.
+- Fixed column alignment so numeric values display properly without text overflow.
+- Ensured all UI text and instructions are in English only.
+- Improved scanner to emit root state after each directory is fully processed instead of during construction.
+
+### Detailed
+
+#### Added
+
+- Added confirmation alert dialog when user clicks Stop to prevent accidental scan interruption.
+
+#### Changed
+
+- Updated copilot-instructions.md to enforce English-only language policy for all code and UI text.
+- Reduced column header widths to prevent text wrapping and improved numeric alignment in tree view.
+- Optimized scanner progress emission timing to occur after directory completion rather than during intermediate processing.
+- Renamed table columns for clarity ("% of Parent (Allocated)" → "% of Total", "Last Modified" → "Modified").
+
+#### Fixed
+
+- Resolved incomplete data display by ensuring root node snapshots are emitted with fully accumulated size/count information.
+- Fixed timer display stalling by improving progress event emission consistency.
+
 ## [0.1.15] - 2026-05-08
 
 ### TLDR
@@ -156,7 +183,8 @@ This project follows Semantic Versioning and uses a Keep a Changelog style.
 
 - Release rerun behavior now updates existing release notes and re-uploads assets safely.
 
-[Unreleased]: https://github.com/novaemx/treesize/compare/v0.1.15...HEAD
+[Unreleased]: https://github.com/novaemx/treesize/compare/v0.1.16...HEAD
+[0.1.16]: https://github.com/novaemx/treesize/releases/tag/v0.1.16
 [0.1.15]: https://github.com/novaemx/treesize/releases/tag/v0.1.15
 [0.1.14]: https://github.com/novaemx/treesize/releases/tag/v0.1.14
 [0.1.13]: https://github.com/novaemx/treesize/releases/tag/v0.1.13
