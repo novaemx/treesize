@@ -16,6 +16,33 @@ This project follows Semantic Versioning and uses a Keep a Changelog style.
 
 - Placeholder.
 
+## [0.1.11] - 2026-05-08
+
+### TLDR
+
+- Tree now updates live while scanning and can be stopped immediately with partial results kept.
+- macOS UI now includes richer TreeSize-style columns and visual bars for size distribution.
+- App now warns when protected folders were skipped and guides users to Full Disk Access for more exact totals.
+
+### Detailed
+
+#### Added
+
+- Added cancellable streaming scan pipeline from Go to the native macOS UI.
+- Added Stop Scan action in the toolbar and File menu.
+- Added percentage gradient bar rendering and semi-transparent size bar rendering in the Name column.
+- Added Full Disk Access prompt when protected folders are skipped.
+
+#### Changed
+
+- Updated the table to include Allocated alongside Size, Files, Folders, percentage, and Last Modified.
+- Improved progressive sorting so larger directories float to the top while results arrive.
+- Reduced metadata overhead by using progressive scanner snapshots and lighter entry inspection paths.
+
+#### Fixed
+
+- Partial scan results now remain visible when a running scan is stopped.
+
 ## [0.1.10] - 2026-05-08
 
 ### TLDR
@@ -61,6 +88,7 @@ This project follows Semantic Versioning and uses a Keep a Changelog style.
 
 - Release rerun behavior now updates existing release notes and re-uploads assets safely.
 
-[Unreleased]: https://github.com/novaemx/treesize/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/novaemx/treesize/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/novaemx/treesize/releases/tag/v0.1.11
 [0.1.10]: https://github.com/novaemx/treesize/releases/tag/v0.1.10
 [0.1.9]: https://github.com/novaemx/treesize/releases/tag/v0.1.9
