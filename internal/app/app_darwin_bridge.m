@@ -296,8 +296,26 @@ static NSView *FindSubview(NSView *parent, NSUserInterfaceItemIdentifier identif
 
 - (void)stopScan:(id)sender {
   (void)sender;
-  if (gActiveScanTask != nil && gScanInProgress) {
-    [gActiveScanTask terminate];
+  if (gActiveScanTask == nil || !gScanInProgress) {
+    return;
+  }
+  NSAlert *alert = [[NSAlert alloc] init];
+  alert.alertStyle = NSAlertStyleWarning;
+  alert.messageText = @"Stop scan?";
+  alert.informativeText = @"Are you sure you want to stop the current scan? Results collected so far will be preserved.";
+  [alert addButtonWithTitle:@"Stop"];
+  [alert addButtonWithTitle:@"Continue"];
+  void (^handler)(NSModalResponse) = ^(NSModalResponse response) {
+    if (response == NSAlertFirstButtonReturn) {
+      if (gActiveScanTask != nil) {
+        [gActiveScanTask terminate];
+      }
+    }
+  };
+  if (gWindow != nil) {
+    [alert beginSheetModalForWindow:gWindow completionHandler:handler];
+  } else {
+    handler([alert runModal]);
   }
 }
 
@@ -470,13 +488,13 @@ static void UpdateVolumeInfo(NSString *path) {
     return;
   }
   if (![path isKindOfClass:[NSString class]] || path.length == 0) {
-    [gVolumeInfoLabel setStringValue:@"Free space: - | Total space: - | Filesystem: -"];
+    [gVolumeInfoLabel setStringValue:@"Free: - | Total: - | Filesystem: -"];
     return;
   }
 
   struct statfs fsInfo;
   if (statfs(path.fileSystemRepresentation, &fsInfo) != 0) {
-    [gVolumeInfoLabel setStringValue:@"Free space: - | Total space: - | Filesystem: -"];
+    [gVolumeInfoLabel setStringValue:@"Free: - | Total: - | Filesystem: -"];
     return;
   }
 
@@ -488,7 +506,7 @@ static void UpdateVolumeInfo(NSString *path) {
     fsName = @"unknown";
   }
 
-  [gVolumeInfoLabel setStringValue:[NSString stringWithFormat:@"Free space: %@ | Total space: %@ | Filesystem: %@",
+  [gVolumeInfoLabel setStringValue:[NSString stringWithFormat:@"Free: %@ | Total: %@ | Filesystem: %@",
                                                            [gDataSource humanReadableSize:(long long)freeBytes],
                                                            [gDataSource humanReadableSize:(long long)totalBytes],
                                                            fsName]];
@@ -867,14 +885,14 @@ void runNativeAppWithTreeJSON(const char *treeJSON) {
     [gOutlineView setRowHeight:28.0];
     [gOutlineView setFloatsGroupRows:NO];
 
-    NSTableColumn *nameColumn = MakeColumn(@"name", @"Name", 420);
+    NSTableColumn *nameColumn = MakeColumn(@"name", @"Name", 380);
     [gOutlineView addTableColumn:nameColumn];
-    [gOutlineView addTableColumn:MakeColumn(@"size", @"Size", 140)];
-    [gOutlineView addTableColumn:MakeColumn(@"allocated", @"Allocated", 140)];
-    [gOutlineView addTableColumn:MakeColumn(@"files", @"Files", 90)];
-    [gOutlineView addTableColumn:MakeColumn(@"folders", @"Folders", 90)];
-    [gOutlineView addTableColumn:MakeColumn(@"percent", @"% of Parent (Allocated)", 160)];
-    [gOutlineView addTableColumn:MakeColumn(@"modified", @"Last Modified", 160)];
+    [gOutlineView addTableColumn:MakeColumn(@"size", @"Size", 120)];
+    [gOutlineView addTableColumn:MakeColumn(@"allocated", @"Allocated", 120)];
+    [gOutlineView addTableColumn:MakeColumn(@"files", @"Files", 100)];
+    [gOutlineView addTableColumn:MakeColumn(@"folders", @"Folders", 100)];
+    [gOutlineView addTableColumn:MakeColumn(@"percent", @"% of Total", 140)];
+    [gOutlineView addTableColumn:MakeColumn(@"modified", @"Modified", 150)];
     [gOutlineView setOutlineTableColumn:nameColumn];
 
     gDataSource = [[TreeDataSource alloc] init];
