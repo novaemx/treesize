@@ -4,7 +4,7 @@ package app
 
 /*
 #cgo CFLAGS: -x objective-c -fobjc-arc
-#cgo LDFLAGS: -framework Cocoa -framework Metal -framework MetalKit
+#cgo LDFLAGS: -framework Cocoa -framework Metal -framework MetalKit -framework QuartzCore
 #include <stdlib.h>
 void runNativeAppWithTreeJSON(const char* treeJSON);
 */
