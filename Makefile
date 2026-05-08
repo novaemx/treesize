@@ -8,7 +8,7 @@ UNIVERSAL_BIN := $(DIST_DIR)/$(APP_NAME)-darwin-universal
 FORMULA_PATH := ../homebrew-tap/Formula/treesize.rb
 FORMULA_URL := https://github.com/novaemx/treesize-mac/releases/download/$(RELEASE_TAG)/$(RELEASE_TARBALL)
 
-.PHONY: test build-windows-amd64 build-windows-arm64 build-macos-universal package-macos-universal sha256 update-homebrew-formula release-macos-precompiled release-info clean
+.PHONY: test build-windows-amd64 build-windows-arm64 build-macos-universal package-macos-universal sha256 update-homebrew-formula release-macos-precompiled release-tag release-info clean
 
 test:
 	go test ./...
@@ -55,10 +55,32 @@ release-info:
 	@echo "Formula: $(FORMULA_PATH)"
 	@echo "Formula URL: $(FORMULA_URL)"
 
-release-macos-precompiled: test update-homebrew-formula release-info
-	@echo "Release artifacts ready."
-	@echo "1) Upload $(RELEASE_TARBALL_PATH) to GitHub release $(RELEASE_TAG)."
-	@echo "2) Commit treesize formula update in ../homebrew-tap."
+release-tag: test
+	@if git rev-parse $(RELEASE_TAG) >/dev/null 2>&1; then \
+		echo "Tag $(RELEASE_TAG) already exists locally. Delete it first with: git tag -d $(RELEASE_TAG)"; exit 1; \
+	fi
+	git tag -a $(RELEASE_TAG) -m "Release $(VERSION)"
+	git push origin $(RELEASE_TAG)
+	@echo "Tag $(RELEASE_TAG) pushed. GitHub Actions will build the universal macOS binary and publish the Homebrew formula automatically."
+	@echo "Follow progress at: https://github.com/novaemx/treesize/actions"
+
+# On macOS: build locally + update formula + show upload instructions.
+# On Windows: use 'make release-tag' instead; CI handles the macOS build.
+release-macos-precompiled: test
+	@if [ "$$(uname -s)" != "Darwin" ]; then \
+		echo ""; \
+		echo "  On Windows, use:  make release-tag"; \
+		echo "  This pushes tag $(RELEASE_TAG) and lets GitHub Actions (macOS runner)"; \
+		echo "  compile, package, compute sha256, create the GitHub Release,"; \
+		echo "  and update the Homebrew formula automatically."; \
+		echo ""; \
+	else \
+		$(MAKE) update-homebrew-formula && \
+		$(MAKE) release-info && \
+		echo "Release artifacts ready." && \
+		echo "1) Upload $(RELEASE_TARBALL_PATH) to GitHub release $(RELEASE_TAG)." && \
+		echo "2) Commit treesize formula update in ../homebrew-tap."; \
+	fi
 
 clean:
 	rm -rf $(DIST_DIR)
