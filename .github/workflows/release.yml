@@ -12,6 +12,8 @@ jobs:
   release-macos:
     name: Build universal macOS binary and publish release
     runs-on: macos-latest
+    env:
+      TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
 
     steps:
       - name: Checkout treesize
@@ -79,6 +81,7 @@ jobs:
           files: ${{ steps.package.outputs.tarball_path }}
 
       - name: Checkout homebrew-tap
+        if: env.TAP_TOKEN != ''
         uses: actions/checkout@v4
         with:
           repository: novaemx/homebrew-tap
@@ -86,6 +89,7 @@ jobs:
           path: homebrew-tap
 
       - name: Update Homebrew formula
+        if: env.TAP_TOKEN != ''
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
           SHA=${{ steps.package.outputs.sha256 }}
@@ -99,6 +103,7 @@ jobs:
           ' "$FORMULA" > "${FORMULA}.tmp" && mv "${FORMULA}.tmp" "$FORMULA"
 
       - name: Commit and push formula update
+        if: env.TAP_TOKEN != ''
         run: |
           cd homebrew-tap
           git config user.name  "github-actions[bot]"
