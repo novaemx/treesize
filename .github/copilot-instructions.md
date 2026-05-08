@@ -72,3 +72,15 @@ Always write commit messages in Conventional Commits format:
 Types: `feat` (MINOR), `fix`/`perf` (PATCH), `feat!`/`fix!` (MAJOR), `chore`/`docs`/`refactor`/`test`/`ci`/`style` (no bump).
 Breaking change: append `!` or add `BREAKING CHANGE:` footer.
 Subject: imperative mood, no period, ≤72 chars.
+
+## Session Completion Policy
+
+When a coding session is complete and tests are passing:
+
+1. Finish the active flow branch with `gitflow --json finish`.
+2. If there are product changes intended for delivery, cut a release branch, run tests again, and finish the release.
+3. Recreate the annotated tag with the GitHub noreply email if required by remote policy.
+4. Push `main`, `develop`, and the release tag to origin.
+5. Confirm the GitHub Actions release workflow is triggered.
+
+Only skip release publication when the user explicitly asks not to publish.
