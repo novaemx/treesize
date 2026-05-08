@@ -25,6 +25,7 @@ static NSButton *gRescanButton;
 static NSWindow *gWindow;
 static NSString *gLastSelectedPath;
 static BOOL gScanInProgress = NO;
+static NSTask *gActiveScanTask;
 
 static NSDictionary *EmptyRootNodeForPath(NSString *path);
 static void SetStatusMessage(NSString *message);
@@ -33,6 +34,13 @@ static void ApplyRootNode(NSDictionary *rootNode);
 static void PresentDirectoryPicker(void);
 static void StartScanForPath(NSString *path);
 static void PresentError(NSString *title, NSString *message);
+static void ProcessScanStreamLine(NSString *line);
+static NSString *HumanReadableDuration(long long elapsedMS);
+static NSButton *MakeToolbarButton(NSString *title,
+                                   NSString *symbolName,
+                                   SEL action,
+                                   CGFloat x,
+                                   CGFloat width);
 
 @implementation TreeDataSource
 
@@ -204,6 +212,16 @@ static void ApplyRootNode(NSDictionary *rootNode) {
   [gOutlineView expandItem:nil expandChildren:NO];
 }
 
+static NSString *HumanReadableDuration(long long elapsedMS) {
+  long long totalSeconds = elapsedMS / 1000;
+  long long minutes = totalSeconds / 60;
+  long long seconds = totalSeconds % 60;
+  if (minutes > 0) {
+    return [NSString stringWithFormat:@"%lldm %02llds", minutes, seconds];
+  }
+  return [NSString stringWithFormat:@"%llds", seconds];
+}
+
 static void PresentError(NSString *title, NSString *message) {
   NSAlert *alert = [[NSAlert alloc] init];
   alert.alertStyle = NSAlertStyleCritical;
@@ -237,17 +255,77 @@ static void StartScanForPath(NSString *path) {
     }
 
     NSTask *task = [[NSTask alloc] init];
+    gActiveScanTask = task;
     task.executableURL = [NSURL fileURLWithPath:executablePath];
-    task.arguments = @[ @"scan-json", path ];
+    task.arguments = @[ @"scan-json-stream", path ];
 
     NSPipe *stdoutPipe = [NSPipe pipe];
     NSPipe *stderrPipe = [NSPipe pipe];
     task.standardOutput = stdoutPipe;
     task.standardError = stderrPipe;
 
+    NSFileHandle *stdoutHandle = [stdoutPipe fileHandleForReading];
+    __block NSMutableData *lineBuffer = [NSMutableData data];
+    stdoutHandle.readabilityHandler = ^(NSFileHandle *handle) {
+      NSData *chunk = [handle availableData];
+      if (chunk.length == 0) {
+        return;
+      }
+
+      [lineBuffer appendData:chunk];
+      const char *bytes = (const char *)lineBuffer.bytes;
+      NSUInteger start = 0;
+      for (NSUInteger i = 0; i < lineBuffer.length; i++) {
+        if (bytes[i] != '\n') {
+          continue;
+        }
+        NSData *lineData = [lineBuffer subdataWithRange:NSMakeRange(start, i - start)];
+        NSString *line = [[NSString alloc] initWithData:lineData encoding:NSUTF8StringEncoding];
+        if (line.length > 0) {
+          dispatch_async(dispatch_get_main_queue(), ^{
+            ProcessScanStreamLine(line);
+          });
+        }
+        start = i + 1;
+      }
+
+      if (start > 0) {
+        NSData *remaining = [lineBuffer subdataWithRange:NSMakeRange(start, lineBuffer.length - start)];
+        [lineBuffer setData:remaining];
+      }
+    };
+
+    task.terminationHandler = ^(NSTask *terminatedTask) {
+      stdoutHandle.readabilityHandler = nil;
+      NSData *stderrData = [[stderrPipe fileHandleForReading] readDataToEndOfFile];
+      __block NSString *stderrText = [[NSString alloc] initWithData:stderrData encoding:NSUTF8StringEncoding];
+
+      dispatch_async(dispatch_get_main_queue(), ^{
+        gActiveScanTask = nil;
+        SetScanning(NO);
+
+        if (terminatedTask.terminationStatus != 0) {
+          if (stderrText.length == 0) {
+            stderrText = [NSString stringWithFormat:@"Scanner exited with code %d.", terminatedTask.terminationStatus];
+          }
+          SetStatusMessage(@"Scan failed");
+          PresentError(@"Scan failed", stderrText);
+          return;
+        }
+
+        if (lineBuffer.length > 0) {
+          NSString *lastLine = [[NSString alloc] initWithData:lineBuffer encoding:NSUTF8StringEncoding];
+          if (lastLine.length > 0) {
+            ProcessScanStreamLine(lastLine);
+          }
+        }
+      });
+    };
+
     NSError *launchError = nil;
     if (![task launchAndReturnError:&launchError]) {
       dispatch_async(dispatch_get_main_queue(), ^{
+        gActiveScanTask = nil;
         SetScanning(NO);
         SetStatusMessage(@"Ready");
         PresentError(@"Scan failed", launchError.localizedDescription ?: @"Unable to launch scanner.");
@@ -255,42 +333,60 @@ static void StartScanForPath(NSString *path) {
       return;
     }
 
-    NSData *stdoutData = [[stdoutPipe fileHandleForReading] readDataToEndOfFile];
-    NSData *stderrData = [[stderrPipe fileHandleForReading] readDataToEndOfFile];
     [task waitUntilExit];
-
-    if (task.terminationStatus != 0) {
-      NSString *stderrText = [[NSString alloc] initWithData:stderrData encoding:NSUTF8StringEncoding];
-      if (stderrText.length == 0) {
-        stderrText = [NSString stringWithFormat:@"Scanner exited with code %d.", task.terminationStatus];
-      }
-      dispatch_async(dispatch_get_main_queue(), ^{
-        SetScanning(NO);
-        SetStatusMessage(@"Ready");
-        PresentError(@"Scan failed", stderrText);
-      });
-      return;
-    }
-
-    NSError *jsonError = nil;
-    id parsed = [NSJSONSerialization JSONObjectWithData:stdoutData options:0 error:&jsonError];
-    if (![parsed isKindOfClass:[NSDictionary class]]) {
-      NSString *reason = jsonError.localizedDescription ?: @"Scanner output was invalid.";
-      dispatch_async(dispatch_get_main_queue(), ^{
-        SetScanning(NO);
-        SetStatusMessage(@"Ready");
-        PresentError(@"Scan failed", reason);
-      });
-      return;
-    }
-
-    NSDictionary *rootNode = (NSDictionary *)parsed;
-    dispatch_async(dispatch_get_main_queue(), ^{
-      ApplyRootNode(rootNode);
-      SetScanning(NO);
-      SetStatusMessage(@"Scan complete");
-    });
   });
+}
+
+static void ProcessScanStreamLine(NSString *line) {
+  NSData *data = [line dataUsingEncoding:NSUTF8StringEncoding];
+  if (data.length == 0) {
+    return;
+  }
+
+  NSError *jsonError = nil;
+  id parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+  if (![parsed isKindOfClass:[NSDictionary class]]) {
+    return;
+  }
+
+  NSDictionary *event = (NSDictionary *)parsed;
+  NSDictionary *root = [event[@"root"] isKindOfClass:[NSDictionary class]] ? event[@"root"] : nil;
+  NSString *type = [event[@"type"] isKindOfClass:[NSString class]] ? event[@"type"] : @"";
+  NSString *status = [event[@"status"] isKindOfClass:[NSString class]] ? event[@"status"] : @"";
+  long long elapsedMS = [event[@"elapsedMs"] longLongValue];
+
+  if (root != nil) {
+    ApplyRootNode(root);
+  }
+
+  if (status.length > 0) {
+    if ([type isEqualToString:@"progress"]) {
+      SetStatusMessage([NSString stringWithFormat:@"%@ - %@", status, HumanReadableDuration(elapsedMS)]);
+    } else {
+      SetStatusMessage(status);
+    }
+  }
+}
+
+static NSButton *MakeToolbarButton(NSString *title,
+                                   NSString *symbolName,
+                                   SEL action,
+                                   CGFloat x,
+                                   CGFloat width) {
+  NSButton *button = [[NSButton alloc] initWithFrame:NSMakeRect(x, 36, width, 28)];
+  [button setTitle:title];
+  [button setBezelStyle:NSBezelStyleTexturedRounded];
+  [button setTarget:gController];
+  [button setAction:action];
+  if (@available(macOS 11.0, *)) {
+    NSImage *icon = [NSImage imageWithSystemSymbolName:symbolName accessibilityDescription:title];
+    if (icon != nil) {
+      [button setImage:icon];
+      [button setImagePosition:NSImageLeading];
+      [button setContentTintColor:[NSColor labelColor]];
+    }
+  }
+  return button;
 }
 
 static void PresentDirectoryPicker(void) {
@@ -324,6 +420,14 @@ static void InstallMainMenu(void) {
   [menubar addItem:appMenuItem];
   NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"App"];
   NSString *appName = [[NSProcessInfo processInfo] processName];
+
+    NSMenuItem *aboutItem = [[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"About %@", appName]
+                     action:@selector(orderFrontStandardAboutPanel:)
+                   keyEquivalent:@""];
+    [aboutItem setTarget:NSApp];
+    [appMenu addItem:aboutItem];
+    [appMenu addItem:[NSMenuItem separatorItem]];
+
   NSMenuItem *quitItem = [[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"Quit %@", appName]
                                                      action:@selector(terminate:)
                                               keyEquivalent:@"q"];
@@ -381,38 +485,38 @@ void runNativeAppWithTreeJSON(const char *treeJSON) {
                                             backing:NSBackingStoreBuffered
                                               defer:NO];
     [gWindow setTitle:@"TreeSize"];
+    [gWindow setTitleVisibility:NSWindowTitleVisible];
+    [gWindow setToolbarStyle:NSWindowToolbarStyleUnified];
+    [gWindow setTitlebarAppearsTransparent:NO];
 
     NSView *content = [[NSView alloc] initWithFrame:frame];
     [content setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     [gWindow setContentView:content];
 
-    NSView *header = [[NSView alloc] initWithFrame:NSMakeRect(0, frame.size.height - 70, frame.size.width, 70)];
+    NSVisualEffectView *header = [[NSVisualEffectView alloc] initWithFrame:NSMakeRect(0, frame.size.height - 72, frame.size.width, 72)];
+    [header setMaterial:NSVisualEffectMaterialHeaderView];
+    [header setBlendingMode:NSVisualEffectBlendingModeWithinWindow];
+    [header setState:NSVisualEffectStateActive];
     [header setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
 
-    gChooseButton = [[NSButton alloc] initWithFrame:NSMakeRect(16, 36, 130, 26)];
-    [gChooseButton setTitle:@"Select Directory..."];
-    [gChooseButton setBezelStyle:NSBezelStyleRounded];
-    [gChooseButton setTarget:gController];
-    [gChooseButton setAction:@selector(chooseDirectory:)];
+    gChooseButton = MakeToolbarButton(@"Select", @"externaldrive", @selector(chooseDirectory:), 16, 110);
     [header addSubview:gChooseButton];
 
-    gRescanButton = [[NSButton alloc] initWithFrame:NSMakeRect(154, 36, 86, 26)];
-    [gRescanButton setTitle:@"Rescan"];
-    [gRescanButton setBezelStyle:NSBezelStyleRounded];
-    [gRescanButton setTarget:gController];
-    [gRescanButton setAction:@selector(rescan:)];
+    gRescanButton = MakeToolbarButton(@"Rescan", @"arrow.clockwise", @selector(rescan:), 134, 100);
     [gRescanButton setEnabled:NO];
     [header addSubview:gRescanButton];
 
-    gProgressIndicator = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(252, 39, 16, 16)];
+    gProgressIndicator = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(246, 41, 16, 16)];
     [gProgressIndicator setStyle:NSProgressIndicatorStyleSpinning];
     [gProgressIndicator setDisplayedWhenStopped:NO];
     [header addSubview:gProgressIndicator];
 
-    gStatusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(276, 38, frame.size.width - 292, 18)];
+    gStatusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(268, 39, frame.size.width - 284, 18)];
     [gStatusLabel setEditable:NO];
     [gStatusLabel setBezeled:NO];
     [gStatusLabel setDrawsBackground:NO];
+    [gStatusLabel setTextColor:[NSColor secondaryLabelColor]];
+    [gStatusLabel setFont:[NSFont systemFontOfSize:12 weight:NSFontWeightMedium]];
     [gStatusLabel setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
     [header addSubview:gStatusLabel];
 
@@ -420,6 +524,8 @@ void runNativeAppWithTreeJSON(const char *treeJSON) {
     [gPathLabel setEditable:NO];
     [gPathLabel setBezeled:NO];
     [gPathLabel setDrawsBackground:NO];
+    [gPathLabel setTextColor:[NSColor tertiaryLabelColor]];
+    [gPathLabel setFont:[NSFont systemFontOfSize:12 weight:NSFontWeightRegular]];
     [gPathLabel setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
     [header addSubview:gPathLabel];
 
@@ -459,13 +565,17 @@ void runNativeAppWithTreeJSON(const char *treeJSON) {
     [splitView addArrangedSubview:scrollView];
 
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
-    NSView *bottomPane = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, frame.size.width, 120)];
+    NSVisualEffectView *bottomPane = [[NSVisualEffectView alloc] initWithFrame:NSMakeRect(0, 0, frame.size.width, 120)];
+    [bottomPane setMaterial:NSVisualEffectMaterialContentBackground];
+    [bottomPane setBlendingMode:NSVisualEffectBlendingModeWithinWindow];
+    [bottomPane setState:NSVisualEffectStateActive];
     [bottomPane setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
 
     gSummaryLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 92, frame.size.width - 32, 18)];
     [gSummaryLabel setEditable:NO];
     [gSummaryLabel setBezeled:NO];
     [gSummaryLabel setDrawsBackground:NO];
+    [gSummaryLabel setFont:[NSFont monospacedDigitSystemFontOfSize:12 weight:NSFontWeightSemibold]];
     [gSummaryLabel setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
     [bottomPane addSubview:gSummaryLabel];
 
