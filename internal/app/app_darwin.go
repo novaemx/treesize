@@ -12,28 +12,19 @@ import "C"
 
 import (
 	"encoding/json"
-	"os"
 	"unsafe"
-
-	"github.com/novaemx/treesize-mac/internal/core/scanner"
 )
 
 func Run() error {
-	root := os.Getenv("TREESIZE_ROOT")
-	if root == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return err
-		}
-		root = home
-	}
-
-	node, err := scanner.ScanTree(root)
-	if err != nil {
-		return err
-	}
-
-	payload, err := json.Marshal(node)
+	payload, err := json.Marshal(map[string]any{
+		"name":       "(No Selection)",
+		"path":       "",
+		"size":       0,
+		"fileCount":  0,
+		"folderCount": 0,
+		"modTimeUnix": 0,
+		"children":   []any{},
+	})
 	if err != nil {
 		return err
 	}
