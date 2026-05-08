@@ -1,6 +1,15 @@
 <!-- gitflow-version: 0.6.5 -->
 # Copilot Instructions
 
+## Language Policy
+
+**All code comments, UI strings, documentation, and instructions MUST be in English only.** No Spanish, no mixed languages. This applies to:
+- Code comments and docstrings
+- UI labels, buttons, menu items, alerts, and status messages
+- Error messages and logs
+- Git commit messages (Conventional Commits format in English)
+- Documentation and README files
+
 ## Gitflow Enforcement
 
 **Before modifying ANY code, run the gitflow pre-flight check.**
