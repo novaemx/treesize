@@ -1,8 +1,9 @@
-# Release 0.1.6
+# Release 0.1.7
 
 **Date:** 2026-05-08
 
 ## Bug Fixes
 
-- Squash(bugfix): node24-actions
+- Merge bugfix 'release-rerun-safe' into develop
+- Make release workflow rerun-safe
 
