@@ -84,3 +84,16 @@ When a coding session is complete and tests are passing:
 5. Confirm the GitHub Actions release workflow is triggered.
 
 Only skip release publication when the user explicitly asks not to publish.
+
+## Changelog Policy (Keep a Changelog + SemVer)
+
+Use `CHANGELOG.md` as the canonical release history.
+
+1. Follow Keep a Changelog structure and SemVer versioning.
+2. Every release entry MUST include both sections:
+	- `### TLDR` (short bullets, release-summary level)
+	- `### Detailed` (complete list grouped by Added/Changed/Fixed/Removed/Security as applicable)
+3. During release creation, update `CHANGELOG.md` for that exact version before finishing the release branch.
+4. GitHub Release tag description MUST include the `TLDR` content for the released version.
+5. GitHub Release tag description MUST explicitly state that full details are in `CHANGELOG.md`.
+6. Keep `## [Unreleased]` at the top with the same `TLDR` and `Detailed` subsections as a staging area.

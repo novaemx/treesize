@@ -32,6 +32,53 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Build release notes from CHANGELOG
+        id: changelog
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          if [ ! -f CHANGELOG.md ]; then
+            echo "CHANGELOG.md not found" >&2
+            exit 1
+          fi
+
+          SECTION=$(awk -v v="$VERSION" '
+            $0 ~ "^## \\[" {
+              if (in_section == 1) {
+                if ($0 ~ "^## \\[" v "\\]") {
+                  in_section = 1
+                } else {
+                  exit
+                }
+              }
+            }
+            $0 ~ "^## \\[" v "\\]" { in_section = 1 }
+            in_section == 1 { print }
+          ' CHANGELOG.md)
+          if [ -z "$SECTION" ]; then
+            echo "Version section [$VERSION] not found in CHANGELOG.md" >&2
+            exit 1
+          fi
+
+          TLDR=$(printf "%s\n" "$SECTION" | awk '/^### TLDR/{flag=1;next}/^### /{if(flag)exit}flag')
+          TLDR=$(printf "%s\n" "$TLDR" | sed '/^[[:space:]]*$/d')
+          if [ -z "$TLDR" ]; then
+            echo "TLDR section for [$VERSION] is empty in CHANGELOG.md" >&2
+            exit 1
+          fi
+
+          cat > release-notes.md <<EOF
+          ## TreeSize ${GITHUB_REF_NAME}
+
+          ### TLDR
+          $TLDR
+
+          Full detailed changes are available in CHANGELOG.md.
+
+          ### Install via Homebrew
+
+              brew install novaemx/tap/treesize
+          EOF
+
       - name: Run tests
         run: go test ./...
 
@@ -77,14 +124,7 @@ jobs:
           RELEASE_TARBALL_PATH: ${{ steps.package.outputs.tarball_path }}
           RELEASE_SHA256: ${{ steps.package.outputs.sha256 }}
         run: |
-          cat > release-notes.md <<EOF
-          ## TreeSize ${GITHUB_REF_NAME}
-
-          Native macOS disk usage analyzer.
-
-          ### Install via Homebrew
-
-              brew install novaemx/tap/treesize
+          cat >> release-notes.md <<EOF
 
           ### Direct download
           Universal macOS binary (Apple Silicon + Intel): ${RELEASE_TARBALL}
@@ -92,6 +132,9 @@ jobs:
           **SHA256:** ${RELEASE_SHA256}
           EOF
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" \
+              --title "TreeSize ${GITHUB_REF_NAME}" \
+              --notes-file release-notes.md
             gh release upload "${GITHUB_REF_NAME}" "${RELEASE_TARBALL_PATH}" --clobber
           else
             gh release create "${GITHUB_REF_NAME}" "${RELEASE_TARBALL_PATH}" \
