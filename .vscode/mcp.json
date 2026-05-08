@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "gitflow": {
+      "command": "C:\\Users\\luisr\\bin\\gitflow.exe",
+      "args": [
+        "serve"
+      ]
+    }
+  }
+}
