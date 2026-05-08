@@ -14,7 +14,7 @@ jobs:
     runs-on: macos-latest
     env:
       TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
       - name: Checkout treesize
@@ -93,7 +93,7 @@ jobs:
 
       - name: Checkout homebrew-tap
         if: env.TAP_TOKEN != ''
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
         with:
           repository: novaemx/homebrew-tap
           token: ${{ secrets.TAP_TOKEN }}
@@ -121,5 +121,9 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/treesize.rb
+          if git diff --cached --quiet; then
+            echo "No formula changes to commit."
+            exit 0
+          fi
           git commit -m "feat: update treesize to ${{ github.ref_name }}"
           git push origin HEAD
