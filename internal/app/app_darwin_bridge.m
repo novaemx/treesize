@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
 #import <MetalKit/MetalKit.h>
+#import <QuartzCore/QuartzCore.h>
 #include <signal.h>
 #include <string.h>
 
@@ -50,6 +51,15 @@ static void PromptForFullDiskAccessIfNeeded(void);
 static NSTableCellView *MakeNameCellView(void);
 static NSTableCellView *MakeTextCellView(NSString *identifier, NSTextAlignment alignment);
 static NSTableCellView *MakePercentCellView(void);
+
+enum {
+  NameBarTag = 1001,
+  NameImageTag = 1002,
+  NameTextTag = 1003,
+  TextValueTag = 1004,
+  PercentFillTag = 2001,
+  PercentTextTag = 2002,
+};
 
 @implementation TreeDataSource
 
@@ -150,9 +160,9 @@ static NSTableCellView *MakePercentCellView(void);
       cell = MakeNameCellView();
     }
 
-    NSView *barView = [cell viewWithTag:1001];
-    NSTextField *textField = cell.textField;
-    NSImageView *imageView = cell.imageView;
+    NSView *barView = [cell viewWithTag:NameBarTag];
+    NSTextField *textField = (NSTextField *)[cell viewWithTag:NameTextTag];
+    NSImageView *imageView = (NSImageView *)[cell viewWithTag:NameImageTag];
     CGFloat ratio = self.totalSize <= 0 ? 0.0 : MIN(1.0, MAX(0.0, (CGFloat)size / (CGFloat)self.totalSize));
     NSRect bounds = cell.bounds;
     CGFloat width = floor(MAX(0.0, (bounds.size.width - 12.0) * ratio));
@@ -173,12 +183,13 @@ static NSTableCellView *MakePercentCellView(void);
       cell = MakePercentCellView();
     }
 
-    NSView *fillView = [cell viewWithTag:2001];
-    NSTextField *label = cell.textField;
+    NSView *fillView = [cell viewWithTag:PercentFillTag];
+    NSTextField *label = (NSTextField *)[cell viewWithTag:PercentTextTag];
     double pct = self.totalSize <= 0 ? 0.0 : ((double)size * 100.0) / (double)self.totalSize;
     CGFloat fraction = (CGFloat)MIN(1.0, MAX(0.0, pct / 100.0));
     NSRect bounds = cell.bounds;
     fillView.frame = NSMakeRect(1, 1, floor((bounds.size.width - 2.0) * fraction), MAX(0.0, bounds.size.height - 2));
+    fillView.layer.frame = fillView.bounds;
     label.stringValue = [NSString stringWithFormat:@"%.1f %%", pct];
     return cell;
   }
@@ -190,16 +201,18 @@ static NSTableCellView *MakePercentCellView(void);
     cell = MakeTextCellView(cellIdentifier, alignment);
   }
 
+  NSTextField *valueLabel = (NSTextField *)[cell viewWithTag:TextValueTag];
+
   if ([identifier isEqualToString:@"size"] || [identifier isEqualToString:@"allocated"]) {
-    cell.textField.stringValue = [self humanReadableSize:size];
+    valueLabel.stringValue = [self humanReadableSize:size];
   } else if ([identifier isEqualToString:@"files"]) {
-    cell.textField.stringValue = [NSString stringWithFormat:@"%lld", [node[@"fileCount"] longLongValue]];
+    valueLabel.stringValue = [NSString stringWithFormat:@"%lld", [node[@"fileCount"] longLongValue]];
   } else if ([identifier isEqualToString:@"folders"]) {
-    cell.textField.stringValue = [NSString stringWithFormat:@"%lld", [node[@"folderCount"] longLongValue]];
+    valueLabel.stringValue = [NSString stringWithFormat:@"%lld", [node[@"folderCount"] longLongValue]];
   } else if ([identifier isEqualToString:@"modified"]) {
-    cell.textField.stringValue = [self formattedDateFromUnix:[node[@"modTimeUnix"] longLongValue]];
+    valueLabel.stringValue = [self formattedDateFromUnix:[node[@"modTimeUnix"] longLongValue]];
   } else {
-    cell.textField.stringValue = @"";
+    valueLabel.stringValue = @"";
   }
 
   return cell;
@@ -246,7 +259,7 @@ static NSTableCellView *MakeNameCellView(void) {
   cell.wantsLayer = YES;
 
   NSView *barView = [[NSView alloc] initWithFrame:NSMakeRect(6, 4, 0, 16)];
-  barView.tag = 1001;
+  barView.tag = NameBarTag;
   barView.wantsLayer = YES;
   barView.layer.backgroundColor = [[NSColor colorWithRed:0.52 green:0.56 blue:0.62 alpha:0.24] CGColor];
   barView.layer.cornerRadius = 4.0;
@@ -254,18 +267,18 @@ static NSTableCellView *MakeNameCellView(void) {
   [cell addSubview:barView positioned:NSWindowBelow relativeTo:nil];
 
   NSImageView *imageView = [[NSImageView alloc] initWithFrame:NSMakeRect(8, 4, 16, 16)];
+  imageView.tag = NameImageTag;
   imageView.imageScaling = NSImageScaleProportionallyDown;
-  cell.imageView = imageView;
   [cell addSubview:imageView];
 
   NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(30, 2, 260, 20)];
+  label.tag = NameTextTag;
   label.editable = NO;
   label.bezeled = NO;
   label.drawsBackground = NO;
   label.font = [NSFont systemFontOfSize:12 weight:NSFontWeightSemibold];
   label.lineBreakMode = NSLineBreakByTruncatingMiddle;
   label.autoresizingMask = NSViewWidthSizable;
-  cell.textField = label;
   [cell addSubview:label];
 
   return cell;
@@ -275,6 +288,7 @@ static NSTableCellView *MakeTextCellView(NSString *identifier, NSTextAlignment a
   NSTableCellView *cell = [[NSTableCellView alloc] initWithFrame:NSMakeRect(0, 0, 100, 24)];
   cell.identifier = identifier;
   NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(6, 2, 120, 20)];
+  label.tag = TextValueTag;
   label.editable = NO;
   label.bezeled = NO;
   label.drawsBackground = NO;
@@ -282,7 +296,6 @@ static NSTableCellView *MakeTextCellView(NSString *identifier, NSTextAlignment a
   label.font = [NSFont monospacedDigitSystemFontOfSize:12 weight:NSFontWeightMedium];
   label.textColor = [NSColor labelColor];
   label.autoresizingMask = NSViewWidthSizable;
-  cell.textField = label;
   [cell addSubview:label];
   return cell;
 }
@@ -295,7 +308,7 @@ static NSTableCellView *MakePercentCellView(void) {
   cell.layer.cornerRadius = 4.0;
 
   NSView *fillView = [[NSView alloc] initWithFrame:NSMakeRect(1, 1, 0, 22)];
-  fillView.tag = 2001;
+  fillView.tag = PercentFillTag;
   fillView.wantsLayer = YES;
   CAGradientLayer *gradient = [CAGradientLayer layer];
   gradient.colors = @[ (id)[[NSColor colorWithRed:0.45 green:0.36 blue:0.96 alpha:0.96] CGColor],
@@ -304,11 +317,12 @@ static NSTableCellView *MakePercentCellView(void) {
   gradient.endPoint = CGPointMake(1, 0.5);
   gradient.cornerRadius = 3.0;
   gradient.frame = fillView.bounds;
-  fillView.layer = gradient;
+  [fillView setLayer:gradient];
   fillView.autoresizingMask = NSViewHeightSizable;
   [cell addSubview:fillView positioned:NSWindowBelow relativeTo:nil];
 
   NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(4, 2, 112, 20)];
+  label.tag = PercentTextTag;
   label.editable = NO;
   label.bezeled = NO;
   label.drawsBackground = NO;
@@ -316,7 +330,6 @@ static NSTableCellView *MakePercentCellView(void) {
   label.font = [NSFont monospacedDigitSystemFontOfSize:12 weight:NSFontWeightSemibold];
   label.textColor = [NSColor whiteColor];
   label.autoresizingMask = NSViewWidthSizable;
-  cell.textField = label;
   [cell addSubview:label];
   return cell;
 }
