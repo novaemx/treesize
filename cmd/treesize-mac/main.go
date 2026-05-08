@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/novaemx/treesize-mac/internal/app"
@@ -71,9 +75,14 @@ type scanStreamEvent struct {
 	Completed int         `json:"completed,omitempty"`
 	Total     int         `json:"total,omitempty"`
 	ElapsedMS int64       `json:"elapsedMs,omitempty"`
+	Denied    int         `json:"denied,omitempty"`
+	Current   string      `json:"current,omitempty"`
 }
 
 func runScanJSONStream(rootPath string) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	info, err := os.Lstat(rootPath)
 	if err != nil {
 		return err
@@ -131,59 +140,53 @@ func runScanJSONStream(rootPath string) error {
 		Completed: 0,
 		Total:     total,
 		ElapsedMS: 0,
+		Current:   rootPath,
 	}); err != nil {
 		return err
 	}
 
-	completed := 0
-	for _, entry := range entries {
-		childPath := filepath.Join(rootPath, entry.Name())
-		child, err := scanner.ScanTree(childPath)
-		completed++
-		if err != nil {
-			if err := enc.Encode(scanStreamEvent{
+	rootNode, err = scanner.ScanTreeWithOptions(rootPath, scanner.Options{
+		Context: ctx,
+		OnProgress: func(snapshot *model.Node, progress scanner.Progress) {
+			status := fmt.Sprintf("Scanning %s", filepath.Base(progress.CurrentPath))
+			if progress.CurrentPath == rootPath {
+				status = "Scanning root"
+			}
+			_ = enc.Encode(scanStreamEvent{
 				Type:      "progress",
-				Root:      rootNode,
-				Status:    fmt.Sprintf("Skipping %s", entry.Name()),
-				Completed: completed,
+				Root:      snapshot,
+				Status:    status,
+				Completed: progress.VisitedCount,
 				Total:     total,
 				ElapsedMS: time.Since(start).Milliseconds(),
-			}); err != nil {
-				return err
-			}
-			continue
-		}
+				Denied:    progress.PermissionDenied,
+				Current:   progress.CurrentPath,
+			})
+		},
+	})
 
-		rootNode.Children = append(rootNode.Children, child)
-		rootNode.Size += child.Size
-		rootNode.FileCount += child.FileCount
-		rootNode.FolderCount += child.FolderCount
-		if child.IsDir {
-			rootNode.FolderCount++
-		}
-
-		sort.Slice(rootNode.Children, func(i, j int) bool {
-			return rootNode.Children[i].Size > rootNode.Children[j].Size
-		})
-
-		if err := enc.Encode(scanStreamEvent{
-			Type:      "progress",
+	if errors.Is(err, scanner.ErrScanCancelled) || errors.Is(ctx.Err(), context.Canceled) {
+		return enc.Encode(scanStreamEvent{
+			Type:      "cancelled",
 			Root:      rootNode,
-			Status:    fmt.Sprintf("Scanning %d/%d", completed, total),
-			Completed: completed,
+			Status:    "Scan stopped",
+			Completed: total,
 			Total:     total,
 			ElapsedMS: time.Since(start).Milliseconds(),
-		}); err != nil {
-			return err
-		}
+			Current:   rootPath,
+		})
+	}
+	if err != nil {
+		return err
 	}
 
 	return enc.Encode(scanStreamEvent{
 		Type:      "done",
 		Root:      rootNode,
 		Status:    "Scan complete",
-		Completed: completed,
+		Completed: total,
 		Total:     total,
 		ElapsedMS: time.Since(start).Milliseconds(),
+		Current:   rootPath,
 	})
 }
