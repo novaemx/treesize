@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout treesize
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0
 
@@ -25,6 +25,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: false
 
       - name: Read version from tag
         id: version
@@ -36,10 +37,14 @@ jobs:
       - name: Build universal macOS binary
         run: |
           mkdir -p dist
-          GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -trimpath \
+          GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 \
+            CC="clang -arch x86_64" \
+            go build -trimpath \
             -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o dist/treesize-darwin-amd64 ./cmd/treesize-mac
-          GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -trimpath \
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 \
+            CC="clang -arch arm64" \
+            go build -trimpath \
             -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o dist/treesize-darwin-arm64 ./cmd/treesize-mac
           lipo -create -output dist/treesize-darwin-universal \
@@ -60,7 +65,7 @@ jobs:
           echo "tarball_path=dist/${TARBALL}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release and upload tarball
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.3.2
         with:
           tag_name: ${{ github.ref_name }}
           name: "TreeSize ${{ github.ref_name }}"
@@ -87,6 +92,7 @@ jobs:
           repository: novaemx/homebrew-tap
           token: ${{ secrets.TAP_TOKEN }}
           path: homebrew-tap
+          ref: main
 
       - name: Update Homebrew formula
         if: env.TAP_TOKEN != ''
