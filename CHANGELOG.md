@@ -16,6 +16,30 @@ This project follows Semantic Versioning and uses a Keep a Changelog style.
 
 - Placeholder.
 
+## [0.1.15] - 2026-05-08
+
+### TLDR
+
+- Fixed live scan updates so Root remains pinned to the selected folder/disk during streaming updates.
+- Preserved expanded directory nodes while incremental results arrive.
+- Added footer volume metadata showing Free space, Total space, and Filesystem type.
+
+### Detailed
+
+#### Added
+
+- Added filesystem metadata rendering in the native footer using macOS filesystem stats.
+
+#### Changed
+
+- Updated the scanner progress emission model to always stream snapshots from the selected scan root.
+- Updated outline refresh behavior to restore expanded nodes by path after each incremental reload.
+
+#### Fixed
+
+- Prevented root-path drift in the header while scanning deep subfolders.
+- Restored stable directory expansion behavior during progressive updates.
+
 ## [0.1.14] - 2026-05-08
 
 ### TLDR
@@ -132,7 +156,8 @@ This project follows Semantic Versioning and uses a Keep a Changelog style.
 
 - Release rerun behavior now updates existing release notes and re-uploads assets safely.
 
-[Unreleased]: https://github.com/novaemx/treesize/compare/v0.1.14...HEAD
+[Unreleased]: https://github.com/novaemx/treesize/compare/v0.1.15...HEAD
+[0.1.15]: https://github.com/novaemx/treesize/releases/tag/v0.1.15
 [0.1.14]: https://github.com/novaemx/treesize/releases/tag/v0.1.14
 [0.1.13]: https://github.com/novaemx/treesize/releases/tag/v0.1.13
 [0.1.12]: https://github.com/novaemx/treesize/releases/tag/v0.1.12

@@ -29,6 +29,7 @@ type scanState struct {
 	onProgress       func(*model.Node, Progress)
 	visitedCount     int
 	permissionDenied int
+	root             *model.Node
 }
 
 // ScanTree walks a path recursively and returns a full size hierarchy.
@@ -67,11 +68,14 @@ func buildNode(path string, info os.FileInfo, state *scanState) (*model.Node, er
 		IsDir:       info.IsDir(),
 		ModTimeUnix: info.ModTime().Unix(),
 	}
+	if state.root == nil {
+		state.root = node
+	}
 
 	if !info.IsDir() {
 		state.visitedCount++
 		node.FileCount = 1
-		state.emit(node, path)
+		state.emit(path)
 		return node, nil
 	}
 
@@ -123,16 +127,16 @@ func buildNode(path string, info os.FileInfo, state *scanState) (*model.Node, er
 	sort.Slice(node.Children, func(i, j int) bool {
 		return node.Children[i].Size > node.Children[j].Size
 	})
-	state.emit(node, path)
+	state.emit(path)
 
 	return node, nil
 }
 
-func (s *scanState) emit(node *model.Node, currentPath string) {
-	if s.onProgress == nil || node == nil {
+func (s *scanState) emit(currentPath string) {
+	if s.onProgress == nil || s.root == nil {
 		return
 	}
-	s.onProgress(cloneNode(node), Progress{
+	s.onProgress(cloneNode(s.root), Progress{
 		CurrentPath:      currentPath,
 		VisitedCount:     s.visitedCount,
 		PermissionDenied: s.permissionDenied,

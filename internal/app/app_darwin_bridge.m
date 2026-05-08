@@ -2,6 +2,7 @@
 #import <Metal/Metal.h>
 #import <MetalKit/MetalKit.h>
 #import <QuartzCore/QuartzCore.h>
+#import <sys/mount.h>
 #include <signal.h>
 #include <string.h>
 
@@ -21,6 +22,7 @@ static AppController *gController;
 static NSOutlineView *gOutlineView;
 static NSTextField *gPathLabel;
 static NSTextField *gSummaryLabel;
+static NSTextField *gVolumeInfoLabel;
 static NSTextField *gStatusLabel;
 static NSProgressIndicator *gProgressIndicator;
 static NSButton *gChooseButton;
@@ -42,6 +44,7 @@ static void StartScanForPath(NSString *path);
 static void PresentError(NSString *title, NSString *message);
 static void ProcessScanStreamLine(NSString *line);
 static NSString *HumanReadableDuration(long long elapsedMS);
+static void UpdateVolumeInfo(NSString *path);
 static NSButton *MakeToolbarButton(NSString *title,
                                    NSString *symbolName,
                                    SEL action,
@@ -58,6 +61,54 @@ static NSUserInterfaceItemIdentifier const NameTextIdentifier = @"NameText";
 static NSUserInterfaceItemIdentifier const TextValueIdentifier = @"TextValue";
 static NSUserInterfaceItemIdentifier const PercentFillIdentifier = @"PercentFill";
 static NSUserInterfaceItemIdentifier const PercentTextIdentifier = @"PercentText";
+
+static NSArray *ChildrenForNode(NSDictionary *node) {
+  if (![node isKindOfClass:[NSDictionary class]]) {
+    return @[];
+  }
+  NSArray *children = node[@"children"];
+  if (![children isKindOfClass:[NSArray class]]) {
+    return @[];
+  }
+  return children;
+}
+
+static void CollectExpandedNodePaths(NSMutableSet<NSString *> *paths) {
+  if (gOutlineView == nil || paths == nil) {
+    return;
+  }
+  NSInteger rows = [gOutlineView numberOfRows];
+  for (NSInteger row = 0; row < rows; row++) {
+    id item = [gOutlineView itemAtRow:row];
+    if (![item isKindOfClass:[NSDictionary class]]) {
+      continue;
+    }
+    if (![gOutlineView isItemExpanded:item]) {
+      continue;
+    }
+    NSString *path = ((NSDictionary *)item)[@"path"];
+    if ([path isKindOfClass:[NSString class]] && path.length > 0) {
+      [paths addObject:path];
+    }
+  }
+}
+
+static void RestoreExpandedNodePaths(NSDictionary *node, NSSet<NSString *> *paths) {
+  if (![node isKindOfClass:[NSDictionary class]] || paths.count == 0) {
+    return;
+  }
+
+  for (NSDictionary *child in ChildrenForNode(node)) {
+    if (![child isKindOfClass:[NSDictionary class]]) {
+      continue;
+    }
+    NSString *childPath = child[@"path"];
+    if ([childPath isKindOfClass:[NSString class]] && [paths containsObject:childPath]) {
+      [gOutlineView expandItem:child];
+    }
+    RestoreExpandedNodePaths(child, paths);
+  }
+}
 
 static NSView *FindSubview(NSView *parent, NSUserInterfaceItemIdentifier identifier) {
   for (NSView *subview in parent.subviews) {
@@ -381,6 +432,9 @@ static void ApplyRootNode(NSDictionary *rootNode) {
     safeRoot = EmptyRootNodeForPath(gLastSelectedPath ?: @"");
   }
 
+  NSMutableSet<NSString *> *expandedPaths = [NSMutableSet set];
+  CollectExpandedNodePaths(expandedPaths);
+
   gDataSource.rootNode = safeRoot;
   gDataSource.totalSize = [safeRoot[@"size"] longLongValue];
 
@@ -394,8 +448,11 @@ static void ApplyRootNode(NSDictionary *rootNode) {
                                                           [safeRoot[@"fileCount"] longLongValue],
                                                           [safeRoot[@"folderCount"] longLongValue]]];
 
+  UpdateVolumeInfo(rootPath.length > 0 ? rootPath : gLastSelectedPath);
+
   [gOutlineView reloadData];
   [gOutlineView expandItem:nil expandChildren:NO];
+  RestoreExpandedNodePaths(gDataSource.rootNode, expandedPaths);
 }
 
 static NSString *HumanReadableDuration(long long elapsedMS) {
@@ -406,6 +463,35 @@ static NSString *HumanReadableDuration(long long elapsedMS) {
     return [NSString stringWithFormat:@"%lldm %02llds", minutes, seconds];
   }
   return [NSString stringWithFormat:@"%llds", seconds];
+}
+
+static void UpdateVolumeInfo(NSString *path) {
+  if (gVolumeInfoLabel == nil) {
+    return;
+  }
+  if (![path isKindOfClass:[NSString class]] || path.length == 0) {
+    [gVolumeInfoLabel setStringValue:@"Free space: - | Total space: - | Filesystem: -"];
+    return;
+  }
+
+  struct statfs fsInfo;
+  if (statfs(path.fileSystemRepresentation, &fsInfo) != 0) {
+    [gVolumeInfoLabel setStringValue:@"Free space: - | Total space: - | Filesystem: -"];
+    return;
+  }
+
+  unsigned long long blockSize = (unsigned long long)fsInfo.f_bsize;
+  unsigned long long totalBytes = (unsigned long long)fsInfo.f_blocks * blockSize;
+  unsigned long long freeBytes = (unsigned long long)fsInfo.f_bavail * blockSize;
+  NSString *fsName = [NSString stringWithUTF8String:fsInfo.f_fstypename];
+  if (fsName == nil || fsName.length == 0) {
+    fsName = @"unknown";
+  }
+
+  [gVolumeInfoLabel setStringValue:[NSString stringWithFormat:@"Free space: %@ | Total space: %@ | Filesystem: %@",
+                                                           [gDataSource humanReadableSize:(long long)freeBytes],
+                                                           [gDataSource humanReadableSize:(long long)totalBytes],
+                                                           fsName]];
 }
 
 static void PromptForFullDiskAccessIfNeeded(void) {
@@ -804,7 +890,7 @@ void runNativeAppWithTreeJSON(const char *treeJSON) {
     [splitView addArrangedSubview:scrollView];
 
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
-    NSVisualEffectView *bottomPane = [[NSVisualEffectView alloc] initWithFrame:NSMakeRect(0, 0, frame.size.width, 120)];
+    NSVisualEffectView *bottomPane = [[NSVisualEffectView alloc] initWithFrame:NSMakeRect(0, 0, frame.size.width, 140)];
     [bottomPane setMaterial:NSVisualEffectMaterialContentBackground];
     [bottomPane setBlendingMode:NSVisualEffectBlendingModeWithinWindow];
     [bottomPane setState:NSVisualEffectStateActive];
@@ -818,8 +904,17 @@ void runNativeAppWithTreeJSON(const char *treeJSON) {
     [gSummaryLabel setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
     [bottomPane addSubview:gSummaryLabel];
 
+    gVolumeInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 70, frame.size.width - 32, 18)];
+    [gVolumeInfoLabel setEditable:NO];
+    [gVolumeInfoLabel setBezeled:NO];
+    [gVolumeInfoLabel setDrawsBackground:NO];
+    [gVolumeInfoLabel setTextColor:[NSColor secondaryLabelColor]];
+    [gVolumeInfoLabel setFont:[NSFont monospacedDigitSystemFontOfSize:11 weight:NSFontWeightRegular]];
+    [gVolumeInfoLabel setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
+    [bottomPane addSubview:gVolumeInfoLabel];
+
     if (device != nil) {
-      MTKView *metalView = [[MTKView alloc] initWithFrame:NSMakeRect(16, 8, frame.size.width - 32, 76) device:device];
+      MTKView *metalView = [[MTKView alloc] initWithFrame:NSMakeRect(16, 8, frame.size.width - 32, 56) device:device];
       [metalView setEnableSetNeedsDisplay:YES];
       [metalView setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
       [bottomPane addSubview:metalView];
